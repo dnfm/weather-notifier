@@ -1,0 +1,117 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Try::Tiny;
+use LWP::UserAgent;
+use Desktop::Notify;
+use FindBin qw( $Bin );
+use List::Util qw( max );
+use JSON::Parse qw( parse_json json_file_to_perl );
+
+my $config_file = $ARGV[1] || "$Bin/weather-notification.conf";
+my $config      = try { json_file_to_perl( $config_file ) }
+                catch { warn "Can't parse config: $_\n"; return undef };
+
+die "No config!\n" if !$config;
+
+my $station = $config->{ station_code }
+    or die "I need a station code to obtain the weather.";
+
+my $key = $config->{ api_key }
+    or die "I need an API key!\n";
+
+my $notify = Desktop::Notify->new();
+
+# It would be stupid to update more often than every 5 minutes.
+my $update_every = max( $config->{ update_every }, 300 );
+
+my $url  = "http://api.wunderground.com/api/$key/forecast/q/$station.json";
+my $ua   = LWP::UserAgent->new();
+my $resp = $ua->get( $url );
+
+while ( 1 ) {
+    my $weather = get_weather();
+
+    if ( keys %{ $weather } ) {
+        my @details = try {
+            @{ $weather->{ forecast }->{ simpleforecast }->{ forecastday } }
+        }
+        catch {
+            warn "Couldn't parse weather details received.\n";
+            ();
+        };
+
+        if ( @details ) {
+            my @html_weather;
+            
+            for my $day ( 0 .. 2 ) {
+                push @html_weather, generate_html_for_weather( $details[ $day ] );
+            }
+
+            display_weather( @html_weather );
+        }
+    }
+
+    sleep $update_every;
+}
+
+{
+    my $last_weather;
+
+    sub display_weather {
+        my ( @weather ) = @_;
+
+        my $body = "<table><tr><td align='center'>"
+                 . join( q{</td><td align='center'>}, @weather )
+                 . "</td></tr></table>";
+
+        return if ( $last_weather // q{} ) eq $body
+               && $config->{ show_only_if_changed };
+
+        $last_weather = $body;
+
+        my $notification = $notify->create(
+            timeout => 5000,
+            summary => 'Weather Update',
+            body    => $body,
+        );
+
+        $notification->show();
+    }
+}
+
+sub get_weather {
+    if ( !$resp->is_success ) {
+        warn "Failed getting weather (" . $resp->status_line . ") "
+           . ( $resp->decoded_content // q{} ) . "\n";
+    }
+    else {
+        return try { parse_json( $resp->decoded_content ) }
+             catch { warn "Failed loading weather received: "
+                        .  $resp->decoded_content
+                        . "(Error was: $_)";
+                     {}
+                   };
+    }
+
+    return {};
+}
+
+sub generate_html_for_weather {
+    my ( $json ) = @_;
+
+    my $icon = "file://$Bin/icons/$json->{ icon }.png";
+
+    my $unit  = ( $config->{ metric } // 0 ) ? 'celsius' : 'fahrenheit';
+    my $short = substr( $unit, 0, 1);
+
+    return "$json->{ date }->{ weekday }<br />\n"
+         . "<img alt='$json->{ conditions }'"
+         . " src='$icon' alt='$json->{ conditions }' /><br />\n"
+         . "<h4>$json->{ conditions }</h4><br />\n"
+         . "High: $json->{ high }->{ $unit }$short<br />\n"
+         . "Low: $json->{ low }->{ $unit }$short";
+}
+
