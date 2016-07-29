@@ -1,0 +1,28 @@
+
+weather-notifier
+
+Simple libnotify weather updater.
+
+This app fetches the weather from weather underground, and displays it on your
+desktop using libnotify.
+
+To work properly, you must be using a notify daemon that supports images and
+tables.  How it will look on more lightweight notification daemons is
+undefined, but feel free to hack it so that it works for your needs.
+
+The config file is where you set your local weather station code, your api key,
+and other config settings.
+
+It requires the following perl modules:
+    - LWP::UserAgent
+    - Try::Tiny
+    - Desktop::Notify
+    - FindBin
+    - List::Util
+    - JSON::Parse
+
+Then, just run it, and it should begin updating.  You can specify how often it
+updates, and whether you only want updates if the weather has changed.
+
+Feel free to file bugs on github, or email me at github@datademons.com for more
+help.

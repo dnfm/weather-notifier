@@ -1,5 +1,22 @@
 #!/usr/bin/perl
 
+=head1 weather-notifier
+
+An app that uses libnotify (via Desktop::Notify) to display weather updates on
+your desktop periodically.
+
+=head1 Author
+
+Justin Wheeler email: github.com at datademons dot com
+
+=head1 License
+
+This program is licensed by the same license as Perl itself.
+
+Patches welcome. :)
+
+=cut
+
 use strict;
 use warnings;
 
